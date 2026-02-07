@@ -9,12 +9,28 @@ type PredictionsListProps = {
 export function PredictionsList({ predictions, loading }: PredictionsListProps) {
   const top = predictions.slice(0, 3);
   const rest = predictions.slice(3);
+  const confidence = predictions[0]?.confidence;
+  const fallbackUsed = predictions[0]?.fallback_used;
+
+  const confidenceLabel =
+    confidence === 'high' ? 'Alta' : confidence === 'medium' ? 'Media' : confidence === 'low' ? 'Baja' : null;
 
   return (
     <section className="panel panel--results">
       <header className="panel__head">
-        <h3 className="panel__title">Aves probables</h3>
-        <p className="panel__subtitle">Ranking simple basado en reglas.</p>
+        <div className="panel__title-row">
+          <h3 className="panel__title">Aves probables</h3>
+          {confidenceLabel ? (
+            <span
+              className={`badge badge--${confidence}`}
+              title={fallbackUsed ? 'Se aplico fallback por falta de datos exactos.' : 'Datos exactos.'}
+            >
+              Confianza: {confidenceLabel}
+              {fallbackUsed ? ' (fallback)' : ''}
+            </span>
+          ) : null}
+        </div>
+        <p className="panel__subtitle">Ranking simple basado en reglas (o eBird si no hay reglas).</p>
       </header>
 
       {loading ? <p className="loading-line">Calculando predicción...</p> : null}

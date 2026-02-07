@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 
 
 HourBucket = Literal["dawn", "morning", "afternoon", "evening"]
+PredictionConfidence = Literal["high", "medium", "low"]
 
 
 class SightingCreate(BaseModel):
@@ -40,6 +41,8 @@ class PredictionOut(BaseModel):
     species: str
     score: int
     reason: str
+    confidence: PredictionConfidence = "high"
+    fallback_used: bool = False
 
 
 class SeedResult(BaseModel):

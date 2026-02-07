@@ -204,6 +204,43 @@ body {
   line-height: 1.48;
 }
 
+.panel__title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+}
+
+.badge {
+  border: 1px solid rgba(23, 34, 38, 0.16);
+  border-radius: 999px;
+  padding: 0.28rem 0.6rem;
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.01em;
+  background: rgba(255, 255, 255, 0.72);
+  color: rgba(23, 34, 38, 0.78);
+  white-space: nowrap;
+}
+
+.badge--high {
+  border-color: rgba(47, 107, 79, 0.22);
+  background: rgba(47, 107, 79, 0.1);
+  color: rgba(19, 78, 50, 0.95);
+}
+
+.badge--medium {
+  border-color: rgba(231, 185, 106, 0.3);
+  background: rgba(231, 185, 106, 0.18);
+  color: rgba(90, 59, 12, 0.92);
+}
+
+.badge--low {
+  border-color: rgba(31, 93, 122, 0.24);
+  background: rgba(31, 93, 122, 0.12);
+  color: rgba(15, 59, 79, 0.92);
+}
+
 .field {
   display: grid;
   gap: 0.38rem;
@@ -905,4 +942,3 @@ textarea {
     transition: none;
   }
 }
-

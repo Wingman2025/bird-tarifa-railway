@@ -15,6 +15,13 @@ class Settings(BaseSettings):
     s3_public_base_url: str = ""
     max_upload_mb: int = 8
 
+    # Optional external predictions (eBird). Leave EBIRD_API_KEY empty to disable.
+    ebird_api_key: str = ""
+    ebird_geo_lat: float = 36.0139
+    ebird_geo_lng: float = -5.6069
+    ebird_geo_dist_km: int = 25
+    ebird_geo_back_days: int = 30
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     @property

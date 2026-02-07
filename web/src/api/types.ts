@@ -22,6 +22,8 @@ export interface PredictionOut {
   species: string;
   score: number;
   reason: string;
+  confidence: 'high' | 'medium' | 'low';
+  fallback_used: boolean;
 }
 
 export interface PredictionQuery {

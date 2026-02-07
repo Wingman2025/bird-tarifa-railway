@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from .config import get_settings
 from .db import Base, engine, get_db
+from .ebird import fetch_recent_geo_observations, observations_to_predictions
 from .models import PredictionRule, Sighting
 from .schemas import (
     HourBucket,
@@ -179,29 +180,115 @@ def get_predictions(
     limit: int = Query(default=10, ge=1, le=50),
     db: Session = Depends(get_db),
 ) -> list[PredictionOut]:
-    stmt = (
-        select(
+    def query_rules(
+        *,
+        months: list[int] | None,
+        bucket: HourBucket | None,
+    ):
+        stmt = select(
             PredictionRule.species.label("species"),
             func.sum(PredictionRule.weight).label("score"),
+        ).where(PredictionRule.zone == zone)
+        if months is not None:
+            if len(months) == 1:
+                stmt = stmt.where(PredictionRule.month == months[0])
+            else:
+                stmt = stmt.where(PredictionRule.month.in_(months))
+        if bucket is not None:
+            stmt = stmt.where(PredictionRule.hour_bucket == bucket)
+        stmt = (
+            stmt.group_by(PredictionRule.species)
+            .order_by(func.sum(PredictionRule.weight).desc(), PredictionRule.species.asc())
+            .limit(limit)
         )
-        .where(
-            PredictionRule.zone == zone,
-            PredictionRule.month == month,
-            PredictionRule.hour_bucket == hour_bucket,
+        return db.execute(stmt).all()
+
+    def build(rows, *, confidence: str, fallback_used: bool, reason: str) -> list[PredictionOut]:
+        return [
+            PredictionOut(
+                species=row.species,
+                score=int(row.score),
+                reason=reason,
+                confidence=confidence,  # type: ignore[arg-type]
+                fallback_used=fallback_used,
+            )
+            for row in rows
+        ]
+
+    # 1) Exact rules
+    exact_rows = query_rules(months=[month], bucket=hour_bucket)
+    if exact_rows:
+        return build(
+            exact_rows,
+            confidence="high",
+            fallback_used=False,
+            reason=f"reglas: {zone}, mes {month}, {hour_bucket}",
         )
-        .group_by(PredictionRule.species)
-        .order_by(func.sum(PredictionRule.weight).desc(), PredictionRule.species.asc())
-        .limit(limit)
-    )
-    rows = db.execute(stmt).all()
-    return [
-        PredictionOut(
-            species=row.species,
-            score=int(row.score),
-            reason=f"zone={zone}, month={month}, bucket={hour_bucket}",
+
+    # 2) Same month, ignore hour bucket
+    month_rows = query_rules(months=[month], bucket=None)
+    if month_rows:
+        return build(
+            month_rows,
+            confidence="medium",
+            fallback_used=True,
+            reason=f"reglas (fallback): {zone}, mes {month}, franja relajada",
         )
-        for row in rows
-    ]
+
+    # 3) Neighbor months, same hour bucket
+    prev_month = 12 if month == 1 else month - 1
+    next_month = 1 if month == 12 else month + 1
+    neighbor_rows = query_rules(months=[prev_month, next_month], bucket=hour_bucket)
+    if neighbor_rows:
+        return build(
+            neighbor_rows,
+            confidence="low",
+            fallback_used=True,
+            reason=f"reglas (fallback): {zone}, mes cercano, {hour_bucket}",
+        )
+
+    # 4) Zone-only fallback
+    zone_rows = query_rules(months=None, bucket=None)
+    if zone_rows:
+        return build(
+            zone_rows,
+            confidence="low",
+            fallback_used=True,
+            reason=f"reglas (fallback): {zone}, mostrando base general",
+        )
+
+    # 5) External fallback: eBird recent observations near the configured point.
+    if settings.ebird_api_key:
+        try:
+            observations = fetch_recent_geo_observations(
+                lat=settings.ebird_geo_lat,
+                lng=settings.ebird_geo_lng,
+                dist_km=settings.ebird_geo_dist_km,
+                back_days=settings.ebird_geo_back_days,
+                max_results=200,
+            )
+            rows, confidence, fallback_used, _reason = observations_to_predictions(
+                observations=observations,
+                requested_month=month,
+                requested_bucket=hour_bucket,
+                back_days=settings.ebird_geo_back_days,
+                limit=limit,
+            )
+            return [
+                PredictionOut(
+                    species=row["species"],
+                    score=int(row["score"]),
+                    reason=str(row["reason"]),
+                    confidence=confidence,  # type: ignore[arg-type]
+                    fallback_used=fallback_used,
+                )
+                for row in rows
+            ]
+        except Exception:
+            # Keep the endpoint stable; external sources should never hard-fail the API.
+            return []
+
+    return []
 
 
 @app.post("/prediction-rules/seed", response_model=SeedResult)
