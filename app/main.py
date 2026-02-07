@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from threading import Lock
 from time import time
 
@@ -87,6 +87,29 @@ def _build_zones() -> list[ZoneOut]:
         )
     except Exception:
         return zones
+
+    # Prefer Spanish hotspots (Tarifa is on the border so geo search includes Morocco too).
+    hotspots_es = [hotspot for hotspot in hotspots if hotspot.country_code == "ES"]
+    if hotspots_es:
+        hotspots = hotspots_es
+
+    # Prefer hotspots with recent activity so predictions are meaningful.
+    cutoff = datetime.now(timezone.utc) - timedelta(days=settings.ebird_geo_back_days)
+    recent_hotspots = [
+        hotspot for hotspot in hotspots if hotspot.latest_obs_dt and hotspot.latest_obs_dt >= cutoff
+    ]
+    if recent_hotspots:
+        hotspots = recent_hotspots
+
+    # Sort by eBird "popularity" signals first.
+    hotspots.sort(
+        key=lambda hotspot: (
+            -(hotspot.num_checklists_all_time or 0),
+            -(hotspot.num_species_all_time or 0),
+            -(hotspot.latest_obs_dt.timestamp() if hotspot.latest_obs_dt else 0),
+            hotspot.name.lower(),
+        )
+    )
 
     # Avoid an overwhelming dropdown: keep a few representative hotspots by coarse geo grid.
     seen_cells: set[tuple[float, float]] = set()

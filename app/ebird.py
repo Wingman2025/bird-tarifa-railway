@@ -27,6 +27,10 @@ class EbirdHotspot:
     name: str
     lat: float
     lng: float
+    country_code: str | None = None
+    latest_obs_dt: datetime | None = None
+    num_species_all_time: int | None = None
+    num_checklists_all_time: int | None = None
 
 
 def _parse_obs_dt(value: str) -> tuple[datetime | None, bool]:
@@ -122,7 +126,9 @@ def fetch_recent_location_observations(
     if not loc_id:
         return []
 
-    url = f"{EBIRD_BASE_URL}/data/obs/loc/{loc_id}/recent"
+    # Note: eBird supports passing a hotspot locId to the same endpoint used for regions:
+    # /data/obs/{regionCodeOrLocId}/recent
+    url = f"{EBIRD_BASE_URL}/data/obs/{loc_id}/recent"
     headers = {"X-eBirdApiToken": settings.ebird_api_key}
     params = {
         "back": back_days,
@@ -191,7 +197,36 @@ def fetch_hotspots_geo(
         except (TypeError, ValueError):
             continue
 
-        hotspots.append(EbirdHotspot(id=loc_id, name=loc_name, lat=h_lat, lng=h_lng))
+        country_code = str(item.get("countryCode") or "").strip() or None
+        latest_raw = str(item.get("latestObsDt") or "").strip()
+        latest_dt, _has_time = _parse_obs_dt(latest_raw) if latest_raw else (None, False)
+
+        num_species = None
+        try:
+            value = item.get("numSpeciesAllTime")
+            num_species = int(value) if value is not None else None
+        except (TypeError, ValueError):
+            num_species = None
+
+        num_checklists = None
+        try:
+            value = item.get("numChecklistsAllTime")
+            num_checklists = int(value) if value is not None else None
+        except (TypeError, ValueError):
+            num_checklists = None
+
+        hotspots.append(
+            EbirdHotspot(
+                id=loc_id,
+                name=loc_name,
+                lat=h_lat,
+                lng=h_lng,
+                country_code=country_code,
+                latest_obs_dt=latest_dt,
+                num_species_all_time=num_species,
+                num_checklists_all_time=num_checklists,
+            )
+        )
 
     hotspots.sort(key=lambda h: (_haversine_km(lat, lng, h.lat, h.lng), h.name.lower()))
     return hotspots
