@@ -1,4 +1,6 @@
 from datetime import datetime, timezone
+from threading import Lock
+from time import time
 
 from fastapi import Depends, FastAPI, File, HTTPException, Query, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -7,7 +9,12 @@ from sqlalchemy.orm import Session
 
 from .config import get_settings
 from .db import Base, engine, get_db
-from .ebird import fetch_recent_geo_observations, observations_to_predictions
+from .ebird import (
+    fetch_hotspots_geo,
+    fetch_recent_geo_observations,
+    fetch_recent_location_observations,
+    observations_to_predictions,
+)
 from .models import PredictionRule, Sighting
 from .schemas import (
     BirdInfoOut,
@@ -20,6 +27,7 @@ from .schemas import (
     SeedResult,
     SightingCreate,
     SightingOut,
+    ZoneOut,
 )
 from .storage.s3 import build_photo_key, delete_object, upload_image_bytes
 from .wiki import lookup_bird_info
@@ -28,6 +36,11 @@ settings = get_settings()
 app = FastAPI(title=settings.app_name)
 
 ALLOWED_UPLOAD_TYPES = {"image/jpeg", "image/png", "image/webp"}
+
+ZONES_CACHE_TTL_S = 6 * 60 * 60
+_zones_cache_lock = Lock()
+_zones_cache: list[ZoneOut] | None = None
+_zones_cache_ts: float = 0.0
 
 app.add_middleware(
     CORSMiddleware,
@@ -51,6 +64,65 @@ def root() -> dict[str, str]:
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok", "env": settings.app_env}
+
+
+def _build_zones() -> list[ZoneOut]:
+    zones: list[ZoneOut] = [
+        ZoneOut(
+            id="geo",
+            name=f"Tarifa (radio {settings.ebird_geo_dist_km} km)",
+            kind="geo",
+        )
+    ]
+
+    if not settings.ebird_api_key:
+        return zones
+
+    try:
+        hotspots = fetch_hotspots_geo(
+            lat=settings.ebird_geo_lat,
+            lng=settings.ebird_geo_lng,
+            dist_km=settings.ebird_geo_dist_km,
+            max_results=200,
+        )
+    except Exception:
+        return zones
+
+    # Avoid an overwhelming dropdown: keep a few representative hotspots by coarse geo grid.
+    seen_cells: set[tuple[float, float]] = set()
+    picked = 0
+    for hotspot in hotspots:
+        cell = (round(hotspot.lat, 2), round(hotspot.lng, 2))
+        if cell in seen_cells:
+            continue
+        seen_cells.add(cell)
+        zones.append(ZoneOut(id=hotspot.id, name=hotspot.name, kind="hotspot"))
+        picked += 1
+        if picked >= 12:
+            break
+
+    return zones
+
+
+@app.get("/zones", response_model=list[ZoneOut])
+def list_zones() -> list[ZoneOut]:
+    global _zones_cache, _zones_cache_ts
+
+    now = time()
+    cached = _zones_cache
+    if cached is not None and (now - _zones_cache_ts) < ZONES_CACHE_TTL_S:
+        return cached
+
+    with _zones_cache_lock:
+        now = time()
+        cached = _zones_cache
+        if cached is not None and (now - _zones_cache_ts) < ZONES_CACHE_TTL_S:
+            return cached
+
+        zones = _build_zones()
+        _zones_cache = zones
+        _zones_cache_ts = now
+        return zones
 
 
 @app.get("/birds/info", response_model=BirdInfoOut)
@@ -195,6 +267,7 @@ def create_prediction_rule(
 @app.get("/predictions", response_model=list[PredictionOut])
 def get_predictions(
     zone: str = Query(min_length=2, max_length=120),
+    zone_id: str | None = Query(default=None, max_length=80),
     month: int = Query(ge=1, le=12),
     hour_bucket: HourBucket = Query(),
     limit: int = Query(default=10, ge=1, le=50),
@@ -234,6 +307,54 @@ def get_predictions(
             )
             for row in rows
         ]
+
+    zone_id_value = (zone_id or "").strip()
+
+    # eBird zone-aware predictions (when the UI passes a zone_id).
+    if settings.ebird_api_key and zone_id_value:
+        try:
+            if zone_id_value == "geo":
+                observations = fetch_recent_geo_observations(
+                    lat=settings.ebird_geo_lat,
+                    lng=settings.ebird_geo_lng,
+                    dist_km=settings.ebird_geo_dist_km,
+                    back_days=settings.ebird_geo_back_days,
+                    max_results=200,
+                )
+                scope = (
+                    f"{zone} (radio {settings.ebird_geo_dist_km} km, "
+                    f"{settings.ebird_geo_back_days} días)"
+                )
+            else:
+                observations = fetch_recent_location_observations(
+                    loc_id=zone_id_value,
+                    back_days=settings.ebird_geo_back_days,
+                    max_results=200,
+                )
+                scope = f"{zone} (hotspot, {settings.ebird_geo_back_days} días)"
+
+            rows, confidence, fallback_used, _reason = observations_to_predictions(
+                observations=observations,
+                requested_month=month,
+                requested_bucket=hour_bucket,
+                back_days=settings.ebird_geo_back_days,
+                limit=limit,
+                scope=scope,
+            )
+            if rows:
+                return [
+                    PredictionOut(
+                        species=row["species"],
+                        score=int(row["score"]),
+                        reason=str(row["reason"]),
+                        confidence=confidence,  # type: ignore[arg-type]
+                        fallback_used=fallback_used,
+                    )
+                    for row in rows
+                ]
+        except Exception:
+            # If eBird fails we still allow rules-based fallback.
+            pass
 
     # 1) Exact rules
     exact_rows = query_rules(months=[month], bucket=hour_bucket)
@@ -293,6 +414,10 @@ def get_predictions(
                 requested_bucket=hour_bucket,
                 back_days=settings.ebird_geo_back_days,
                 limit=limit,
+                scope=(
+                    f"Tarifa (radio {settings.ebird_geo_dist_km} km, "
+                    f"{settings.ebird_geo_back_days} días)"
+                ),
             )
             return [
                 PredictionOut(

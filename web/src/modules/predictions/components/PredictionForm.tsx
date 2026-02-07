@@ -1,14 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
 
-import { seedPredictionRules } from '../../../api/endpoints';
-import type { HourBucket } from '../../../api/types';
+import { listZones, seedPredictionRules } from '../../../api/endpoints';
+import type { HourBucket, ZoneOut } from '../../../api/types';
 import { AlertBanner } from '../../../shared/components/AlertBanner';
 import { parseMonth } from '../../../shared/utils/validation';
 import { usePredictions } from '../hooks/usePredictions';
 
-const ZONE_OPTIONS = ['Tarifa Centro', 'Tarifa', 'Bolonia'] as const;
-type ZoneOption = (typeof ZONE_OPTIONS)[number] | 'custom';
+type ZoneValue = string | 'custom';
 
 const HOUR_BUCKET_OPTIONS: { value: HourBucket; label: string }[] = [
   { value: 'dawn', label: 'Amanecer' },
@@ -21,39 +20,85 @@ type PredictionFormProps = {
   predictionsApi: ReturnType<typeof usePredictions>;
 };
 
-function inferZoneOption(value: string): { option: ZoneOption; custom: string } {
-  const trimmed = value.trim();
-  if (!trimmed) return { option: 'Tarifa Centro', custom: '' };
+function getInitialZoneValue(): ZoneValue {
+  const storedValue = localStorage.getItem('bt_zone_value');
+  if (storedValue) return storedValue as ZoneValue;
 
-  if ((ZONE_OPTIONS as readonly string[]).includes(trimmed)) {
-    return { option: trimmed as ZoneOption, custom: '' };
-  }
+  const legacy = localStorage.getItem('bt_zone');
+  if (legacy && legacy.trim()) return 'custom';
 
-  return { option: 'custom', custom: trimmed };
+  return 'geo';
+}
+
+function getInitialCustomZone(): string {
+  const storedCustom = localStorage.getItem('bt_zone_custom');
+  if (storedCustom) return storedCustom;
+
+  const legacy = localStorage.getItem('bt_zone');
+  return (legacy || '').trim();
 }
 
 export function PredictionForm({ predictionsApi }: PredictionFormProps) {
-  const [zoneOption, setZoneOption] = useState<ZoneOption>(() => {
-    const stored = localStorage.getItem('bt_zone') || 'Tarifa Centro';
-    return inferZoneOption(stored).option;
-  });
-  const [customZone, setCustomZone] = useState(() => {
-    const stored = localStorage.getItem('bt_zone') || '';
-    return inferZoneOption(stored).custom;
-  });
+  const [zones, setZones] = useState<ZoneOut[]>([]);
+  const [zonesLoading, setZonesLoading] = useState(false);
+  const [zonesError, setZonesError] = useState<string | null>(null);
+
+  const [zoneValue, setZoneValue] = useState<ZoneValue>(() => getInitialZoneValue());
+  const [customZone, setCustomZone] = useState(() => getInitialCustomZone());
+
   const [monthInput, setMonthInput] = useState(String(new Date().getMonth() + 1));
   const [hourBucket, setHourBucket] = useState<HourBucket>('dawn');
   const [localError, setLocalError] = useState<string | null>(null);
   const [seedMessage, setSeedMessage] = useState<string | null>(null);
   const [seeding, setSeeding] = useState(false);
 
-  const effectiveZone = zoneOption === 'custom' ? customZone : zoneOption;
+  const selectedZone = useMemo(() => zones.find((zone) => zone.id === zoneValue) ?? null, [zones, zoneValue]);
+  const effectiveZoneLabel = zoneValue === 'custom' ? customZone : selectedZone?.name ?? '';
+  const effectiveZoneId = zoneValue === 'custom' ? null : zoneValue;
+
+  const geoZones = useMemo(() => zones.filter((zone) => zone.kind === 'geo'), [zones]);
+  const hotspotZones = useMemo(() => zones.filter((zone) => zone.kind === 'hotspot'), [zones]);
 
   useEffect(() => {
-    const value = effectiveZone.trim();
-    if (!value) return;
-    localStorage.setItem('bt_zone', value);
-  }, [effectiveZone]);
+    localStorage.setItem('bt_zone_value', String(zoneValue));
+  }, [zoneValue]);
+
+  useEffect(() => {
+    localStorage.setItem('bt_zone_custom', customZone);
+  }, [customZone]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setZonesLoading(true);
+    setZonesError(null);
+
+    listZones()
+      .then((data) => {
+        if (cancelled) return;
+        setZones(data);
+
+        setZoneValue((current) => {
+          if (current === 'custom') return current;
+          const stillValid = data.some((zone) => zone.id === current);
+          return stillValid ? current : 'geo';
+        });
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        const message = err instanceof Error ? err.message : 'No se pudieron cargar zonas eBird.';
+        setZonesError(message);
+        setZones([{ id: 'geo', name: 'Tarifa (zona general)', kind: 'geo' }]);
+        setZoneValue((current) => (current === 'custom' ? current : 'geo'));
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setZonesLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -66,13 +111,14 @@ export function PredictionForm({ predictionsApi }: PredictionFormProps) {
       return;
     }
 
-    if (!effectiveZone.trim()) {
+    if (!effectiveZoneLabel.trim()) {
       setLocalError('La zona es obligatoria.');
       return;
     }
 
     await predictionsApi.search({
-      zone: effectiveZone.trim(),
+      zone: effectiveZoneLabel.trim(),
+      zone_id: effectiveZoneId,
       month,
       hour_bucket: hourBucket,
       limit: 10,
@@ -98,10 +144,11 @@ export function PredictionForm({ predictionsApi }: PredictionFormProps) {
     <section className="panel panel--predict">
       <header className="panel__head">
         <h3 className="panel__title">Ajustes</h3>
-        <p className="panel__subtitle">Zona, mes y franja. Sin complicaciones.</p>
+        <p className="panel__subtitle">Zonas sugeridas por eBird para evitar granularidad innecesaria.</p>
       </header>
 
       {localError ? <AlertBanner kind="error" message={localError} /> : null}
+      {zonesError ? <AlertBanner kind="info" message={zonesError} /> : null}
       {predictionsApi.error ? <AlertBanner kind="error" message={predictionsApi.error} /> : null}
       {seedMessage ? <AlertBanner kind="success" message={seedMessage} /> : null}
 
@@ -110,16 +157,33 @@ export function PredictionForm({ predictionsApi }: PredictionFormProps) {
           <label className="field predictor__field predictor__field--grow">
             <span className="field-label">Zona</span>
             <select
-              value={zoneOption}
-              onChange={(event) => setZoneOption(event.target.value as ZoneOption)}
-              disabled={predictionsApi.loading}
+              value={zoneValue}
+              onChange={(event) => setZoneValue(event.target.value as ZoneValue)}
+              disabled={predictionsApi.loading || zonesLoading}
             >
-              {ZONE_OPTIONS.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-              <option value="custom">Otra zona...</option>
+              {geoZones.length ? (
+                <optgroup label="Zona general">
+                  {geoZones.map((zone) => (
+                    <option key={zone.id} value={zone.id}>
+                      {zone.name}
+                    </option>
+                  ))}
+                </optgroup>
+              ) : null}
+
+              {hotspotZones.length ? (
+                <optgroup label="Hotspots eBird">
+                  {hotspotZones.map((zone) => (
+                    <option key={zone.id} value={zone.id}>
+                      {zone.name}
+                    </option>
+                  ))}
+                </optgroup>
+              ) : null}
+
+              <optgroup label="Manual">
+                <option value="custom">Otra zona...</option>
+              </optgroup>
             </select>
           </label>
 
@@ -135,7 +199,7 @@ export function PredictionForm({ predictionsApi }: PredictionFormProps) {
           </label>
         </div>
 
-        {zoneOption === 'custom' ? (
+        {zoneValue === 'custom' ? (
           <label className="field predictor__field">
             <span className="field-label">Nombre de zona</span>
             <input
@@ -179,4 +243,3 @@ export function PredictionForm({ predictionsApi }: PredictionFormProps) {
     </section>
   );
 }
-

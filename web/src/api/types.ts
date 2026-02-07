@@ -1,5 +1,11 @@
 export type HourBucket = 'dawn' | 'morning' | 'afternoon' | 'evening';
 
+export interface ZoneOut {
+  id: string;
+  name: string;
+  kind: 'geo' | 'hotspot';
+}
+
 export interface SightingCreateInput {
   zone: string;
   species_guess?: string | null;
@@ -28,6 +34,7 @@ export interface PredictionOut {
 
 export interface PredictionQuery {
   zone: string;
+  zone_id?: string | null;
   month: number;
   hour_bucket: HourBucket;
   limit?: number;

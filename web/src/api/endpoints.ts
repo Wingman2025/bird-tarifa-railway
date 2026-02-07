@@ -7,6 +7,7 @@ import type {
   SeedResult,
   SightingCreateInput,
   SightingOut,
+  ZoneOut,
 } from './types';
 
 export function healthCheck() {
@@ -23,6 +24,10 @@ export function listSightings(limit = 50) {
   );
 }
 
+export function listZones() {
+  return apiRequest<ZoneOut[]>('/zones', { method: 'GET' });
+}
+
 export function createSighting(payload: SightingCreateInput) {
   return apiRequest<SightingOut>('/sightings', {
     method: 'POST',
@@ -36,6 +41,7 @@ export function getPredictions(query: PredictionQuery) {
     { method: 'GET' },
     {
       zone: query.zone,
+      zone_id: query.zone_id ?? null,
       month: query.month,
       hour_bucket: query.hour_bucket,
       limit: query.limit ?? 10,

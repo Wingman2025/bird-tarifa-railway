@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 
 HourBucket = Literal["dawn", "morning", "afternoon", "evening"]
 PredictionConfidence = Literal["high", "medium", "low"]
+ZoneKind = Literal["geo", "hotspot"]
 
 
 class SightingCreate(BaseModel):
@@ -47,6 +48,12 @@ class PredictionOut(BaseModel):
 
 class SeedResult(BaseModel):
     inserted: int
+
+
+class ZoneOut(BaseModel):
+    id: str
+    name: str
+    kind: ZoneKind
 
 
 class BirdInfoOut(BaseModel):
