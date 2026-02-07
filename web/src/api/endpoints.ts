@@ -1,5 +1,6 @@
 import { apiRequest } from './http';
 import type {
+  BirdInfoOut,
   PhotoUploadOut,
   PredictionOut,
   PredictionQuery,
@@ -39,6 +40,14 @@ export function getPredictions(query: PredictionQuery) {
       hour_bucket: query.hour_bucket,
       limit: query.limit ?? 10,
     },
+  );
+}
+
+export function getBirdInfo(species: string) {
+  return apiRequest<BirdInfoOut>(
+    '/birds/info',
+    { method: 'GET' },
+    { species },
   );
 }
 

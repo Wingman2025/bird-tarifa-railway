@@ -49,6 +49,15 @@ class SeedResult(BaseModel):
     inserted: int
 
 
+class BirdInfoOut(BaseModel):
+    species: str
+    title: str | None = None
+    extract: str | None = None
+    photo_url: str | None = None
+    page_url: str | None = None
+    source: str | None = None
+
+
 class PhotoUploadOut(BaseModel):
     photo_url: str
     key: str

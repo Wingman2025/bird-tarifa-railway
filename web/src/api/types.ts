@@ -33,6 +33,15 @@ export interface PredictionQuery {
   limit?: number;
 }
 
+export interface BirdInfoOut {
+  species: string;
+  title: string | null;
+  extract: string | null;
+  photo_url: string | null;
+  page_url: string | null;
+  source: string | null;
+}
+
 export interface PhotoUploadOut {
   photo_url: string;
   key: string;

@@ -4,9 +4,10 @@ import type { PredictionOut } from '../../../api/types';
 type PredictionsListProps = {
   predictions: PredictionOut[];
   loading: boolean;
+  onSelectSpecies?: (species: string) => void;
 };
 
-export function PredictionsList({ predictions, loading }: PredictionsListProps) {
+export function PredictionsList({ predictions, loading, onSelectSpecies }: PredictionsListProps) {
   const top = predictions.slice(0, 3);
   const rest = predictions.slice(3);
   const confidence = predictions[0]?.confidence;
@@ -45,9 +46,13 @@ export function PredictionsList({ predictions, loading }: PredictionsListProps) 
       {top.length ? (
         <div className="leaderboard" aria-label="Top resultados">
           {top.map((prediction, index) => (
-            <article
+            <button
               key={`${prediction.species}-${prediction.score}`}
               className={`leaderboard__card ${index === 0 ? 'leaderboard__card--top' : ''}`}
+              type="button"
+              onClick={() => onSelectSpecies?.(prediction.species)}
+              disabled={!onSelectSpecies}
+              title={onSelectSpecies ? 'Ver foto y ficha' : undefined}
             >
               <div className="leaderboard__rank" aria-hidden="true">
                 {index + 1}
@@ -59,7 +64,7 @@ export function PredictionsList({ predictions, loading }: PredictionsListProps) 
               <div className="leaderboard__score" aria-label={`Puntaje ${prediction.score}`}>
                 {prediction.score}
               </div>
-            </article>
+            </button>
           ))}
         </div>
       ) : null}
@@ -67,12 +72,20 @@ export function PredictionsList({ predictions, loading }: PredictionsListProps) 
       {rest.length ? (
         <ol className="prediction-list" aria-label="Más resultados">
           {rest.map((prediction) => (
-            <li key={`${prediction.species}-${prediction.score}`} className="prediction-item">
-              <div>
-                <p className="prediction-item__name">{prediction.species}</p>
-                <p className="prediction-item__reason">{prediction.reason}</p>
-              </div>
-              <span className="prediction-item__score">{prediction.score}</span>
+            <li key={`${prediction.species}-${prediction.score}`}>
+              <button
+                type="button"
+                className="prediction-item"
+                onClick={() => onSelectSpecies?.(prediction.species)}
+                disabled={!onSelectSpecies}
+                title={onSelectSpecies ? 'Ver foto y ficha' : undefined}
+              >
+                <div>
+                  <p className="prediction-item__name">{prediction.species}</p>
+                  <p className="prediction-item__reason">{prediction.reason}</p>
+                </div>
+                <span className="prediction-item__score">{prediction.score}</span>
+              </button>
             </li>
           ))}
         </ol>

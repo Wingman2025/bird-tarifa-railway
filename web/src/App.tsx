@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 
 import { PredictionForm } from './modules/predictions/components/PredictionForm';
+import { BirdInfoSheet } from './modules/predictions/components/BirdInfoSheet';
 import { PredictionsList } from './modules/predictions/components/PredictionsList';
 import { usePredictions } from './modules/predictions/hooks/usePredictions';
 import { SightingComposer } from './modules/sightings/components/SightingComposer';
@@ -61,6 +62,7 @@ const navItems: { id: TabId; label: string; icon: ReactNode }[] = [
 function App() {
   const [activeTab, setActiveTab] = useState<TabId>('prediccion');
   const [composerOpen, setComposerOpen] = useState(false);
+  const [birdInfoSpecies, setBirdInfoSpecies] = useState<string | null>(null);
   const sightingsApi = useSightings();
   const predictionsApi = usePredictions();
 
@@ -101,7 +103,11 @@ function App() {
               </header>
               <div className="stack">
                 <PredictionForm predictionsApi={predictionsApi} />
-                <PredictionsList predictions={predictionsApi.predictions} loading={predictionsApi.loading} />
+                <PredictionsList
+                  predictions={predictionsApi.predictions}
+                  loading={predictionsApi.loading}
+                  onSelectSpecies={(species) => setBirdInfoSpecies(species)}
+                />
               </div>
             </div>
           ) : (
@@ -121,6 +127,11 @@ function App() {
         </div>
       </main>
 
+      <BirdInfoSheet
+        open={Boolean(birdInfoSpecies)}
+        species={birdInfoSpecies}
+        onClose={() => setBirdInfoSpecies(null)}
+      />
       <BottomNav items={navItems} activeId={activeTab} onChange={setActiveTab} />
       <Fab onClick={() => setComposerOpen(true)} ariaLabel="Nuevo avistamiento" />
       <BottomSheet

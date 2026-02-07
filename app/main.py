@@ -10,6 +10,7 @@ from .db import Base, engine, get_db
 from .ebird import fetch_recent_geo_observations, observations_to_predictions
 from .models import PredictionRule, Sighting
 from .schemas import (
+    BirdInfoOut,
     HourBucket,
     PhotoDeleteIn,
     PhotoDeleteOut,
@@ -21,6 +22,7 @@ from .schemas import (
     SightingOut,
 )
 from .storage.s3 import build_photo_key, delete_object, upload_image_bytes
+from .wiki import lookup_bird_info
 
 settings = get_settings()
 app = FastAPI(title=settings.app_name)
@@ -49,6 +51,24 @@ def root() -> dict[str, str]:
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok", "env": settings.app_env}
+
+
+@app.get("/birds/info", response_model=BirdInfoOut)
+def get_bird_info(
+    species: str = Query(min_length=2, max_length=120),
+) -> BirdInfoOut:
+    species = species.strip()
+    info = lookup_bird_info(species)
+    if not info:
+        return BirdInfoOut(species=species)
+    return BirdInfoOut(
+        species=species,
+        title=info.title,
+        extract=info.extract,
+        photo_url=info.photo_url,
+        page_url=info.page_url,
+        source=info.source,
+    )
 
 
 @app.post("/uploads/photo", response_model=PhotoUploadOut)
