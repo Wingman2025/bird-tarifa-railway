@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from functools import lru_cache
+import logging
 from uuid import uuid4
 
 import boto3
@@ -13,6 +14,8 @@ CONTENT_TYPE_TO_EXTENSION = {
     "image/png": "png",
     "image/webp": "webp",
 }
+
+logger = logging.getLogger(__name__)
 
 
 def _assert_s3_config() -> None:
@@ -64,8 +67,34 @@ def upload_image_bytes(key: str, payload: bytes, content_type: str) -> str:
             Body=payload,
             ContentType=content_type,
         )
-    except (BotoCoreError, ClientError) as exc:
-        raise RuntimeError("Failed to upload image to S3.") from exc
+    except ClientError as exc:
+        code = (
+            exc.response.get("Error", {}).get("Code")
+            if hasattr(exc, "response")
+            else None
+        )
+        logger.exception(
+            "S3 put_object failed",
+            extra={
+                "s3_bucket": settings.s3_bucket_name,
+                "s3_key": key,
+                "aws_region": settings.aws_region,
+                "aws_error_code": code,
+            },
+        )
+        raise RuntimeError(
+            f"Failed to upload image to S3 ({code or 'ClientError'})."
+        ) from exc
+    except BotoCoreError as exc:
+        logger.exception(
+            "S3 put_object failed (BotoCoreError)",
+            extra={
+                "s3_bucket": settings.s3_bucket_name,
+                "s3_key": key,
+                "aws_region": settings.aws_region,
+            },
+        )
+        raise RuntimeError("Failed to upload image to S3 (BotoCoreError).") from exc
     return _public_url_for_key(key)
 
 
@@ -77,5 +106,31 @@ def delete_object(key: str) -> None:
             Bucket=settings.s3_bucket_name,
             Key=key,
         )
-    except (BotoCoreError, ClientError) as exc:
-        raise RuntimeError("Failed to delete image from S3.") from exc
+    except ClientError as exc:
+        code = (
+            exc.response.get("Error", {}).get("Code")
+            if hasattr(exc, "response")
+            else None
+        )
+        logger.exception(
+            "S3 delete_object failed",
+            extra={
+                "s3_bucket": settings.s3_bucket_name,
+                "s3_key": key,
+                "aws_region": settings.aws_region,
+                "aws_error_code": code,
+            },
+        )
+        raise RuntimeError(
+            f"Failed to delete image from S3 ({code or 'ClientError'})."
+        ) from exc
+    except BotoCoreError as exc:
+        logger.exception(
+            "S3 delete_object failed (BotoCoreError)",
+            extra={
+                "s3_bucket": settings.s3_bucket_name,
+                "s3_key": key,
+                "aws_region": settings.aws_region,
+            },
+        )
+        raise RuntimeError("Failed to delete image from S3 (BotoCoreError).") from exc
