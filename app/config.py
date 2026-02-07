@@ -8,6 +8,12 @@ class Settings(BaseSettings):
     app_env: str = "development"
     database_url: str = "postgresql+psycopg://postgres:postgres@localhost:5432/bird_tarifa"
     cors_origins: str = "*"
+    aws_region: str = "eu-west-1"
+    aws_access_key_id: str = ""
+    aws_secret_access_key: str = ""
+    s3_bucket_name: str = ""
+    s3_public_base_url: str = ""
+    max_upload_mb: int = 8
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

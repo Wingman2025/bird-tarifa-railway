@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from fastapi import Depends, FastAPI, HTTPException, Query, status
+from fastapi import Depends, FastAPI, File, HTTPException, Query, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -10,15 +10,21 @@ from .db import Base, engine, get_db
 from .models import PredictionRule, Sighting
 from .schemas import (
     HourBucket,
+    PhotoDeleteIn,
+    PhotoDeleteOut,
+    PhotoUploadOut,
     PredictionOut,
     PredictionRuleCreate,
     SeedResult,
     SightingCreate,
     SightingOut,
 )
+from .storage.s3 import build_photo_key, delete_object, upload_image_bytes
 
 settings = get_settings()
 app = FastAPI(title=settings.app_name)
+
+ALLOWED_UPLOAD_TYPES = {"image/jpeg", "image/png", "image/webp"}
 
 app.add_middleware(
     CORSMiddleware,
@@ -42,6 +48,68 @@ def root() -> dict[str, str]:
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok", "env": settings.app_env}
+
+
+@app.post("/uploads/photo", response_model=PhotoUploadOut)
+async def upload_photo(file: UploadFile = File(...)) -> PhotoUploadOut:
+    if file.content_type not in ALLOWED_UPLOAD_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail="Unsupported image type. Use jpeg, png or webp.",
+        )
+
+    payload = await file.read()
+    await file.close()
+
+    if not payload:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Empty file payload.",
+        )
+
+    max_bytes = settings.max_upload_mb * 1024 * 1024
+    if len(payload) > max_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"File exceeds {settings.max_upload_mb}MB limit.",
+        )
+
+    try:
+        key = build_photo_key(file.content_type or "")
+        photo_url = upload_image_bytes(
+            key=key,
+            payload=payload,
+            content_type=file.content_type or "application/octet-stream",
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=str(exc),
+        ) from exc
+
+    return PhotoUploadOut(
+        photo_url=photo_url,
+        key=key,
+        content_type=file.content_type or "",
+        size_bytes=len(payload),
+    )
+
+
+@app.delete("/uploads/photo", response_model=PhotoDeleteOut)
+def delete_photo(payload: PhotoDeleteIn) -> PhotoDeleteOut:
+    try:
+        delete_object(payload.key)
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=str(exc),
+        ) from exc
+    return PhotoDeleteOut(deleted=True)
 
 
 @app.post("/sightings", response_model=SightingOut, status_code=status.HTTP_201_CREATED)

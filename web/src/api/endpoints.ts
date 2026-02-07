@@ -1,0 +1,66 @@
+import { apiRequest } from './http';
+import type {
+  PhotoUploadOut,
+  PredictionOut,
+  PredictionQuery,
+  SeedResult,
+  SightingCreateInput,
+  SightingOut,
+} from './types';
+
+export function healthCheck() {
+  return apiRequest<{ status: string; env: string }>('/health', {
+    method: 'GET',
+  });
+}
+
+export function listSightings(limit = 50) {
+  return apiRequest<SightingOut[]>(
+    '/sightings',
+    { method: 'GET' },
+    { limit },
+  );
+}
+
+export function createSighting(payload: SightingCreateInput) {
+  return apiRequest<SightingOut>('/sightings', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function getPredictions(query: PredictionQuery) {
+  return apiRequest<PredictionOut[]>(
+    '/predictions',
+    { method: 'GET' },
+    {
+      zone: query.zone,
+      month: query.month,
+      hour_bucket: query.hour_bucket,
+      limit: query.limit ?? 10,
+    },
+  );
+}
+
+export function uploadPhoto(file: File) {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  return apiRequest<PhotoUploadOut>('/uploads/photo', {
+    method: 'POST',
+    body: formData,
+  });
+}
+
+export function deletePhoto(key: string) {
+  return apiRequest<{ deleted: boolean }>('/uploads/photo', {
+    method: 'DELETE',
+    body: JSON.stringify({ key }),
+  });
+}
+
+export function seedPredictionRules() {
+  return apiRequest<SeedResult>('/prediction-rules/seed', {
+    method: 'POST',
+  });
+}

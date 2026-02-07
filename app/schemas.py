@@ -44,3 +44,18 @@ class PredictionOut(BaseModel):
 
 class SeedResult(BaseModel):
     inserted: int
+
+
+class PhotoUploadOut(BaseModel):
+    photo_url: str
+    key: str
+    content_type: str
+    size_bytes: int
+
+
+class PhotoDeleteIn(BaseModel):
+    key: str = Field(min_length=1, max_length=2048)
+
+
+class PhotoDeleteOut(BaseModel):
+    deleted: bool
