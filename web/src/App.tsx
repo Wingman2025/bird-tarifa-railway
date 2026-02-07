@@ -1,22 +1,66 @@
 import { useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
 
 import { PredictionForm } from './modules/predictions/components/PredictionForm';
 import { PredictionsList } from './modules/predictions/components/PredictionsList';
 import { usePredictions } from './modules/predictions/hooks/usePredictions';
-import { SightingForm } from './modules/sightings/components/SightingForm';
+import { SightingComposer } from './modules/sightings/components/SightingComposer';
 import { SightingsList } from './modules/sightings/components/SightingsList';
 import { useSightings } from './modules/sightings/hooks/useSightings';
-import { Tabs } from './shared/components/Tabs';
+import { BottomNav } from './shared/components/BottomNav';
+import { BottomSheet } from './shared/components/BottomSheet';
+import { Fab } from './shared/components/Fab';
 
-type TabId = 'registro' | 'prediccion';
+type TabId = 'prediccion' | 'historial';
 
-const tabItems: { id: TabId; label: string }[] = [
-  { id: 'registro', label: 'Registro' },
-  { id: 'prediccion', label: 'Prediccion' },
+function CompassIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="20"
+      height="20"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="9" />
+      <path d="M14.6 9.4l-1.7 4.4-4.5 1.8 1.8-4.5 4.4-1.7z" />
+    </svg>
+  );
+}
+
+function AlbumIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="20"
+      height="20"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M7 4h10" />
+      <path d="M7 8h10" />
+      <path d="M5 12h14v8H5z" />
+      <path d="M9 16l2 2 4-4" />
+    </svg>
+  );
+}
+
+const navItems: { id: TabId; label: string; icon: ReactNode }[] = [
+  { id: 'prediccion', label: 'Predicción', icon: <CompassIcon /> },
+  { id: 'historial', label: 'Historial', icon: <AlbumIcon /> },
 ];
 
 function App() {
-  const [activeTab, setActiveTab] = useState<TabId>('registro');
+  const [activeTab, setActiveTab] = useState<TabId>('prediccion');
+  const [composerOpen, setComposerOpen] = useState(false);
   const sightingsApi = useSightings();
   const predictionsApi = usePredictions();
 
@@ -27,47 +71,73 @@ function App() {
   }, [sightingsApi.sightings]);
 
   return (
-    <div className="page-shell">
-      <header className="hero">
-        <div className="hero__overlay" />
-        <div className="container hero__content">
-          <p className="hero__kicker">Bird Tarifa</p>
-          <h1>Avistamiento costero con enfoque de campo y criterio limpio</h1>
-          <p>
-            Diseñado para registrar salidas en Tarifa y consultar aves probables en un flujo
-            moderno, claro y orientado a uso real.
-          </p>
-          <div className="hero__stats">
-            <span>
+    <div className="app-shell">
+      <header className="app-header">
+        <div className="app-header__inner">
+          <div className="brand">
+            <p className="brand__stamp">Tarifa, Cádiz</p>
+            <h1 className="brand__title">Bird Tarifa</h1>
+          </div>
+          <div className="brand__stats" aria-label="Estadísticas">
+            <span className="stat-pill">
               <strong>{stats.total}</strong> registros
             </span>
-            <span>
-              <strong>{stats.withPhoto}</strong> con foto
+            <span className="stat-pill">
+              <strong>{stats.withPhoto}</strong> fotos
             </span>
           </div>
         </div>
       </header>
 
-      <main className="container main-content">
-        <Tabs items={tabItems} activeId={activeTab} onChange={setActiveTab} />
-
-        {activeTab === 'registro' ? (
-          <div className="grid-layout">
-            <SightingForm onCreated={() => sightingsApi.refresh()} />
-            <SightingsList
-              sightings={sightingsApi.sightings}
-              loading={sightingsApi.loading}
-              error={sightingsApi.error}
-              onRefresh={sightingsApi.refresh}
-            />
-          </div>
-        ) : (
-          <div className="grid-layout">
-            <PredictionForm predictionsApi={predictionsApi} />
-            <PredictionsList predictions={predictionsApi.predictions} loading={predictionsApi.loading} />
-          </div>
-        )}
+      <main className="app-main">
+        <div className="app-content">
+          {activeTab === 'prediccion' ? (
+            <div className="screen">
+              <header className="screen__head">
+                <h2 className="screen__title">Predicción</h2>
+                <p className="screen__subtitle">
+                  Reglas ligeras por zona y hora, para decidir a dónde ir.
+                </p>
+              </header>
+              <div className="stack">
+                <PredictionForm predictionsApi={predictionsApi} />
+                <PredictionsList predictions={predictionsApi.predictions} loading={predictionsApi.loading} />
+              </div>
+            </div>
+          ) : (
+            <div className="screen">
+              <header className="screen__head">
+                <h2 className="screen__title">Historial</h2>
+                <p className="screen__subtitle">Tus avistamientos, como notas de campo.</p>
+              </header>
+              <SightingsList
+                sightings={sightingsApi.sightings}
+                loading={sightingsApi.loading}
+                error={sightingsApi.error}
+                onRefresh={sightingsApi.refresh}
+              />
+            </div>
+          )}
+        </div>
       </main>
+
+      <BottomNav items={navItems} activeId={activeTab} onChange={setActiveTab} />
+      <Fab onClick={() => setComposerOpen(true)} ariaLabel="Nuevo avistamiento" />
+      <BottomSheet
+        open={composerOpen}
+        title="Nuevo avistamiento"
+        ariaLabel="Nuevo avistamiento"
+        onClose={() => setComposerOpen(false)}
+      >
+        <SightingComposer
+          onClose={() => setComposerOpen(false)}
+          onCreated={() => {
+            sightingsApi.refresh();
+            setComposerOpen(false);
+            setActiveTab('historial');
+          }}
+        />
+      </BottomSheet>
     </div>
   );
 }
