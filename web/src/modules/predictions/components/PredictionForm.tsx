@@ -7,6 +7,9 @@ import { AlertBanner } from '../../../shared/components/AlertBanner';
 import { parseMonth } from '../../../shared/utils/validation';
 import { usePredictions } from '../hooks/usePredictions';
 
+const ZONE_OPTIONS = ['Tarifa Centro', 'Tarifa', 'Bolonia'] as const;
+type ZoneOption = (typeof ZONE_OPTIONS)[number] | 'custom';
+
 const HOUR_BUCKET_OPTIONS: { value: HourBucket; label: string }[] = [
   { value: 'dawn', label: 'Amanecer' },
   { value: 'morning', label: 'Mañana' },
@@ -18,17 +21,39 @@ type PredictionFormProps = {
   predictionsApi: ReturnType<typeof usePredictions>;
 };
 
+function inferZoneOption(value: string): { option: ZoneOption; custom: string } {
+  const trimmed = value.trim();
+  if (!trimmed) return { option: 'Tarifa Centro', custom: '' };
+
+  if ((ZONE_OPTIONS as readonly string[]).includes(trimmed)) {
+    return { option: trimmed as ZoneOption, custom: '' };
+  }
+
+  return { option: 'custom', custom: trimmed };
+}
+
 export function PredictionForm({ predictionsApi }: PredictionFormProps) {
-  const [zone, setZone] = useState(() => localStorage.getItem('bt_zone') || 'Tarifa Centro');
+  const [zoneOption, setZoneOption] = useState<ZoneOption>(() => {
+    const stored = localStorage.getItem('bt_zone') || 'Tarifa Centro';
+    return inferZoneOption(stored).option;
+  });
+  const [customZone, setCustomZone] = useState(() => {
+    const stored = localStorage.getItem('bt_zone') || '';
+    return inferZoneOption(stored).custom;
+  });
   const [monthInput, setMonthInput] = useState(String(new Date().getMonth() + 1));
   const [hourBucket, setHourBucket] = useState<HourBucket>('dawn');
   const [localError, setLocalError] = useState<string | null>(null);
   const [seedMessage, setSeedMessage] = useState<string | null>(null);
   const [seeding, setSeeding] = useState(false);
 
+  const effectiveZone = zoneOption === 'custom' ? customZone : zoneOption;
+
   useEffect(() => {
-    localStorage.setItem('bt_zone', zone);
-  }, [zone]);
+    const value = effectiveZone.trim();
+    if (!value) return;
+    localStorage.setItem('bt_zone', value);
+  }, [effectiveZone]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -41,13 +66,13 @@ export function PredictionForm({ predictionsApi }: PredictionFormProps) {
       return;
     }
 
-    if (!zone.trim()) {
+    if (!effectiveZone.trim()) {
       setLocalError('La zona es obligatoria.');
       return;
     }
 
     await predictionsApi.search({
-      zone: zone.trim(),
+      zone: effectiveZone.trim(),
       month,
       hour_bucket: hourBucket,
       limit: 10,
@@ -84,14 +109,18 @@ export function PredictionForm({ predictionsApi }: PredictionFormProps) {
         <div className="predictor__row">
           <label className="field predictor__field predictor__field--grow">
             <span className="field-label">Zona</span>
-            <input
-              value={zone}
-              onChange={(event) => setZone(event.target.value)}
-              maxLength={120}
-              required
+            <select
+              value={zoneOption}
+              onChange={(event) => setZoneOption(event.target.value as ZoneOption)}
               disabled={predictionsApi.loading}
-              placeholder="Ej. Bolonia"
-            />
+            >
+              {ZONE_OPTIONS.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+              <option value="custom">Otra zona...</option>
+            </select>
           </label>
 
           <label className="field predictor__field predictor__month">
@@ -105,6 +134,20 @@ export function PredictionForm({ predictionsApi }: PredictionFormProps) {
             />
           </label>
         </div>
+
+        {zoneOption === 'custom' ? (
+          <label className="field predictor__field">
+            <span className="field-label">Nombre de zona</span>
+            <input
+              value={customZone}
+              onChange={(event) => setCustomZone(event.target.value)}
+              maxLength={120}
+              required
+              disabled={predictionsApi.loading}
+              placeholder="Ej. Los Lances"
+            />
+          </label>
+        ) : null}
 
         <div className="predictor__chips" aria-label="Franja horaria">
           {HOUR_BUCKET_OPTIONS.map((option) => {
@@ -136,3 +179,4 @@ export function PredictionForm({ predictionsApi }: PredictionFormProps) {
     </section>
   );
 }
+

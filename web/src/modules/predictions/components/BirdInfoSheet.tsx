@@ -83,7 +83,7 @@ export function BirdInfoSheet({ open, species, onClose }: BirdInfoSheetProps) {
               <p className="bird-copy">{info.extract}</p>
             ) : (
               <p className="bird-copy bird-copy--muted">
-                No encontramos una descripciÃ³n rÃ¡pida para este nombre.
+                No encontramos una descripción rápida para este nombre.
               </p>
             )}
 
@@ -101,4 +101,3 @@ export function BirdInfoSheet({ open, species, onClose }: BirdInfoSheetProps) {
     </BottomSheet>
   );
 }
-
