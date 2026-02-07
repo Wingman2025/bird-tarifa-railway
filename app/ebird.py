@@ -42,17 +42,6 @@ def _parse_obs_dt(value: str) -> tuple[datetime | None, bool]:
             continue
     return None, False
 
-
-def _hour_bucket_for_hour(hour: int) -> str:
-    if 5 <= hour < 8:
-        return "dawn"
-    if 8 <= hour < 12:
-        return "morning"
-    if 12 <= hour < 17:
-        return "afternoon"
-    return "evening"
-
-
 def _haversine_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
     # Good enough for sorting hotspots by proximity.
     radius_km = 6371.0
@@ -236,7 +225,6 @@ def observations_to_predictions(
     *,
     observations: list[EbirdObservation],
     requested_month: int,
-    requested_bucket: str,
     back_days: int,
     limit: int,
     scope: str,
@@ -258,30 +246,18 @@ def observations_to_predictions(
             return True
         return obs.observed_at.month == requested_month
 
-    def matches_bucket(obs: EbirdObservation) -> bool:
-        if not (obs.observed_at and obs.observed_has_time):
-            return True
-        return _hour_bucket_for_hour(obs.observed_at.hour) == requested_bucket
-
-    # Pass 1: strict filters (month + bucket)
-    filtered = [obs for obs in observations if matches_month(obs) and matches_bucket(obs)]
+    # Pass 1: strict filter (month only)
+    filtered = [obs for obs in observations if matches_month(obs)]
     fallback_used = False
     confidence = "medium"
-    reason = f"eBird: {scope}, filtros exactos"
+    reason = f"eBird: {scope}, mes exacto"
 
-    # Pass 2: relax month only
-    if not filtered:
-        filtered = [obs for obs in observations if matches_bucket(obs)]
-        fallback_used = True
-        confidence = "low"
-        reason = f"eBird: {scope}, mes relajado"
-
-    # Pass 3: relax both (bucket + month)
+    # Pass 2: relax month
     if not filtered:
         filtered = observations[:]
         fallback_used = True
         confidence = "low"
-        reason = f"eBird: {scope}, filtros relajados"
+        reason = f"eBird: {scope}, mes relajado"
 
     scores: dict[str, int] = {}
     for obs in filtered:

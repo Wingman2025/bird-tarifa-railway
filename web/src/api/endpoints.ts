@@ -43,7 +43,6 @@ export function getPredictions(query: PredictionQuery) {
       zone: query.zone,
       zone_id: query.zone_id ?? null,
       month: query.month,
-      hour_bucket: query.hour_bucket,
       limit: query.limit ?? 10,
     },
   );

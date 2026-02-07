@@ -18,7 +18,6 @@ from .ebird import (
 from .models import PredictionRule, Sighting
 from .schemas import (
     BirdInfoOut,
-    HourBucket,
     PhotoDeleteIn,
     PhotoDeleteOut,
     PhotoUploadOut,
@@ -294,14 +293,27 @@ def get_predictions(
     zone: str = Query(min_length=2, max_length=120),
     zone_id: str | None = Query(default=None, max_length=80),
     month: int = Query(ge=1, le=12),
-    hour_bucket: HourBucket = Query(),
     limit: int = Query(default=10, ge=1, le=50),
     db: Session = Depends(get_db),
 ) -> list[PredictionOut]:
+    month_name = (
+        "enero",
+        "febrero",
+        "marzo",
+        "abril",
+        "mayo",
+        "junio",
+        "julio",
+        "agosto",
+        "septiembre",
+        "octubre",
+        "noviembre",
+        "diciembre",
+    )[month - 1]
+
     def query_rules(
         *,
         months: list[int] | None,
-        bucket: HourBucket | None,
     ):
         stmt = select(
             PredictionRule.species.label("species"),
@@ -312,8 +324,6 @@ def get_predictions(
                 stmt = stmt.where(PredictionRule.month == months[0])
             else:
                 stmt = stmt.where(PredictionRule.month.in_(months))
-        if bucket is not None:
-            stmt = stmt.where(PredictionRule.hour_bucket == bucket)
         stmt = (
             stmt.group_by(PredictionRule.species)
             .order_by(func.sum(PredictionRule.weight).desc(), PredictionRule.species.asc())
@@ -361,7 +371,6 @@ def get_predictions(
             rows, confidence, fallback_used, _reason = observations_to_predictions(
                 observations=observations,
                 requested_month=month,
-                requested_bucket=hour_bucket,
                 back_days=settings.ebird_geo_back_days,
                 limit=limit,
                 scope=scope,
@@ -382,39 +391,29 @@ def get_predictions(
             pass
 
     # 1) Exact rules
-    exact_rows = query_rules(months=[month], bucket=hour_bucket)
+    exact_rows = query_rules(months=[month])
     if exact_rows:
         return build(
             exact_rows,
             confidence="high",
             fallback_used=False,
-            reason=f"reglas: {zone}, mes {month}, {hour_bucket}",
+            reason=f"reglas: {zone}, {month_name}",
         )
 
-    # 2) Same month, ignore hour bucket
-    month_rows = query_rules(months=[month], bucket=None)
-    if month_rows:
-        return build(
-            month_rows,
-            confidence="medium",
-            fallback_used=True,
-            reason=f"reglas (fallback): {zone}, mes {month}, franja relajada",
-        )
-
-    # 3) Neighbor months, same hour bucket
+    # 2) Neighbor months (fallback)
     prev_month = 12 if month == 1 else month - 1
     next_month = 1 if month == 12 else month + 1
-    neighbor_rows = query_rules(months=[prev_month, next_month], bucket=hour_bucket)
+    neighbor_rows = query_rules(months=[prev_month, next_month])
     if neighbor_rows:
         return build(
             neighbor_rows,
             confidence="low",
             fallback_used=True,
-            reason=f"reglas (fallback): {zone}, mes cercano, {hour_bucket}",
+            reason=f"reglas (fallback): {zone}, mes cercano a {month_name}",
         )
 
-    # 4) Zone-only fallback
-    zone_rows = query_rules(months=None, bucket=None)
+    # 3) Zone-only fallback
+    zone_rows = query_rules(months=None)
     if zone_rows:
         return build(
             zone_rows,
@@ -436,7 +435,6 @@ def get_predictions(
             rows, confidence, fallback_used, _reason = observations_to_predictions(
                 observations=observations,
                 requested_month=month,
-                requested_bucket=hour_bucket,
                 back_days=settings.ebird_geo_back_days,
                 limit=limit,
                 scope=(

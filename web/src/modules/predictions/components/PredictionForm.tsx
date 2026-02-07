@@ -2,18 +2,26 @@ import { useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
 
 import { listZones, seedPredictionRules } from '../../../api/endpoints';
-import type { HourBucket, ZoneOut } from '../../../api/types';
+import type { ZoneOut } from '../../../api/types';
 import { AlertBanner } from '../../../shared/components/AlertBanner';
 import { parseMonth } from '../../../shared/utils/validation';
 import { usePredictions } from '../hooks/usePredictions';
 
 type ZoneValue = string | 'custom';
 
-const HOUR_BUCKET_OPTIONS: { value: HourBucket; label: string }[] = [
-  { value: 'dawn', label: 'Amanecer' },
-  { value: 'morning', label: 'Mañana' },
-  { value: 'afternoon', label: 'Tarde' },
-  { value: 'evening', label: 'Atardecer/Noche' },
+const MONTH_OPTIONS = [
+  { value: 1, label: 'Enero' },
+  { value: 2, label: 'Febrero' },
+  { value: 3, label: 'Marzo' },
+  { value: 4, label: 'Abril' },
+  { value: 5, label: 'Mayo' },
+  { value: 6, label: 'Junio' },
+  { value: 7, label: 'Julio' },
+  { value: 8, label: 'Agosto' },
+  { value: 9, label: 'Septiembre' },
+  { value: 10, label: 'Octubre' },
+  { value: 11, label: 'Noviembre' },
+  { value: 12, label: 'Diciembre' },
 ];
 
 type PredictionFormProps = {
@@ -47,7 +55,6 @@ export function PredictionForm({ predictionsApi }: PredictionFormProps) {
   const [customZone, setCustomZone] = useState(() => getInitialCustomZone());
 
   const [monthInput, setMonthInput] = useState(String(new Date().getMonth() + 1));
-  const [hourBucket, setHourBucket] = useState<HourBucket>('dawn');
   const [localError, setLocalError] = useState<string | null>(null);
   const [seedMessage, setSeedMessage] = useState<string | null>(null);
   const [seeding, setSeeding] = useState(false);
@@ -107,7 +114,7 @@ export function PredictionForm({ predictionsApi }: PredictionFormProps) {
 
     const month = parseMonth(monthInput);
     if (!month) {
-      setLocalError('El mes debe ser un número entre 1 y 12.');
+      setLocalError('Selecciona un mes valido.');
       return;
     }
 
@@ -120,7 +127,6 @@ export function PredictionForm({ predictionsApi }: PredictionFormProps) {
       zone: effectiveZoneLabel.trim(),
       zone_id: effectiveZoneId,
       month,
-      hour_bucket: hourBucket,
       limit: 10,
     });
   };
@@ -189,13 +195,18 @@ export function PredictionForm({ predictionsApi }: PredictionFormProps) {
 
           <label className="field predictor__field predictor__month">
             <span className="field-label">Mes</span>
-            <input
+            <select
               value={monthInput}
               onChange={(event) => setMonthInput(event.target.value)}
-              inputMode="numeric"
               required
               disabled={predictionsApi.loading}
-            />
+            >
+              {MONTH_OPTIONS.map((option) => (
+                <option key={option.value} value={String(option.value)}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
           </label>
         </div>
 
@@ -213,24 +224,6 @@ export function PredictionForm({ predictionsApi }: PredictionFormProps) {
           </label>
         ) : null}
 
-        <div className="predictor__chips" aria-label="Franja horaria">
-          {HOUR_BUCKET_OPTIONS.map((option) => {
-            const isActive = hourBucket === option.value;
-            return (
-              <button
-                key={option.value}
-                type="button"
-                className={`chip ${isActive ? 'chip--active' : ''}`}
-                onClick={() => setHourBucket(option.value)}
-                aria-pressed={isActive}
-                disabled={predictionsApi.loading}
-              >
-                {option.label}
-              </button>
-            );
-          })}
-        </div>
-
         <div className="predictor__actions">
           <button className="btn btn--primary" type="submit" disabled={predictionsApi.loading}>
             {predictionsApi.loading ? 'Buscando...' : 'Buscar'}
@@ -243,3 +236,4 @@ export function PredictionForm({ predictionsApi }: PredictionFormProps) {
     </section>
   );
 }
+

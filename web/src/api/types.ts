@@ -1,5 +1,3 @@
-export type HourBucket = 'dawn' | 'morning' | 'afternoon' | 'evening';
-
 export interface ZoneOut {
   id: string;
   name: string;
@@ -36,7 +34,6 @@ export interface PredictionQuery {
   zone: string;
   zone_id?: string | null;
   month: number;
-  hour_bucket: HourBucket;
   limit?: number;
 }
 
