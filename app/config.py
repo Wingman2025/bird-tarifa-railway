@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     ebird_geo_lng: float = -5.6069
     ebird_geo_dist_km: int = 25
     ebird_geo_back_days: int = 30
+    ebird_spp_locale: str = "es"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

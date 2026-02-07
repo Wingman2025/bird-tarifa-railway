@@ -76,6 +76,8 @@ def fetch_recent_geo_observations(
         "back": back_days,
         "maxResults": max_results,
     }
+    if settings.ebird_spp_locale.strip():
+        params["sppLocale"] = settings.ebird_spp_locale.strip()
 
     with httpx.Client(timeout=timeout_s) as client:
         response = client.get(url, headers=headers, params=params)
@@ -123,6 +125,8 @@ def fetch_recent_location_observations(
         "back": back_days,
         "maxResults": max_results,
     }
+    if settings.ebird_spp_locale.strip():
+        params["sppLocale"] = settings.ebird_spp_locale.strip()
 
     with httpx.Client(timeout=timeout_s) as client:
         response = client.get(url, headers=headers, params=params)
