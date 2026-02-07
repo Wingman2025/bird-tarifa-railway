@@ -94,9 +94,11 @@ def _build_zones() -> list[ZoneOut]:
         hotspots = hotspots_es
 
     # Prefer hotspots with recent activity so predictions are meaningful.
-    cutoff = datetime.now(timezone.utc) - timedelta(days=settings.ebird_geo_back_days)
+    cutoff_date = (datetime.now(timezone.utc) - timedelta(days=settings.ebird_geo_back_days)).date()
     recent_hotspots = [
-        hotspot for hotspot in hotspots if hotspot.latest_obs_dt and hotspot.latest_obs_dt >= cutoff
+        hotspot
+        for hotspot in hotspots
+        if hotspot.latest_obs_dt and hotspot.latest_obs_dt.date() >= cutoff_date
     ]
     if recent_hotspots:
         hotspots = recent_hotspots
