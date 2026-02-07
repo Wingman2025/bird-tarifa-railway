@@ -431,7 +431,7 @@ textarea {
 
 .leaderboard__card {
   display: grid;
-  grid-template-columns: 42px 1fr auto;
+  grid-template-columns: 42px 1fr;
   align-items: center;
   gap: 0.75rem;
   border: 1px solid var(--border);
@@ -491,6 +491,13 @@ textarea {
   letter-spacing: -0.01em;
 }
 
+.leaderboard__meta {
+  margin: 0.28rem 0 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
 .leaderboard__reason {
   margin: 0.25rem 0 0;
   color: var(--muted);
@@ -518,7 +525,7 @@ textarea {
 .prediction-item {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.8rem;
   border: 1px solid var(--border);
   border-radius: 16px;
@@ -559,6 +566,13 @@ textarea {
   margin: 0.22rem 0 0;
   color: var(--muted);
   font-size: 0.82rem;
+}
+
+.prediction-item__meta {
+  margin: 0.25rem 0 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 800;
 }
 
 .prediction-item__score {

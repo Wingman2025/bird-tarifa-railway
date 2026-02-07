@@ -44,6 +44,8 @@ class PredictionOut(BaseModel):
     reason: str
     confidence: PredictionConfidence = "high"
     fallback_used: bool = False
+    observations_count: int | None = None
+    last_seen_days_ago: int | None = None
 
 
 class SeedResult(BaseModel):

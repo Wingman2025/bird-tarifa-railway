@@ -28,6 +28,8 @@ export interface PredictionOut {
   reason: string;
   confidence: 'high' | 'medium' | 'low';
   fallback_used: boolean;
+  observations_count: number | null;
+  last_seen_days_ago: number | null;
 }
 
 export interface PredictionQuery {

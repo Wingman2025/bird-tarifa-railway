@@ -15,6 +15,7 @@ from .ebird import (
     fetch_recent_location_observations,
     observations_to_predictions,
 )
+from .images import normalize_upload_image
 from .models import PredictionRule, Sighting
 from .schemas import (
     BirdInfoOut,
@@ -191,6 +192,13 @@ async def upload_photo(file: UploadFile = File(...)) -> PhotoUploadOut:
             detail=f"File exceeds {settings.max_upload_mb}MB limit.",
         )
 
+    payload = normalize_upload_image(payload=payload, content_type=file.content_type or "")
+    if len(payload) > max_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"File exceeds {settings.max_upload_mb}MB limit.",
+        )
+
     try:
         key = build_photo_key(file.content_type or "")
         photo_url = upload_image_bytes(
@@ -339,6 +347,8 @@ def get_predictions(
                 reason=reason,
                 confidence=confidence,  # type: ignore[arg-type]
                 fallback_used=fallback_used,
+                observations_count=None,
+                last_seen_days_ago=None,
             )
             for row in rows
         ]
@@ -383,6 +393,16 @@ def get_predictions(
                         reason=str(row["reason"]),
                         confidence=confidence,  # type: ignore[arg-type]
                         fallback_used=fallback_used,
+                        observations_count=(
+                            int(row["observations_count"])
+                            if row.get("observations_count") is not None
+                            else None
+                        ),
+                        last_seen_days_ago=(
+                            int(row["last_seen_days_ago"])
+                            if row.get("last_seen_days_ago") is not None
+                            else None
+                        ),
                     )
                     for row in rows
                 ]
@@ -449,6 +469,16 @@ def get_predictions(
                     reason=str(row["reason"]),
                     confidence=confidence,  # type: ignore[arg-type]
                     fallback_used=fallback_used,
+                    observations_count=(
+                        int(row["observations_count"])
+                        if row.get("observations_count") is not None
+                        else None
+                    ),
+                    last_seen_days_ago=(
+                        int(row["last_seen_days_ago"])
+                        if row.get("last_seen_days_ago") is not None
+                        else None
+                    ),
                 )
                 for row in rows
             ]

@@ -264,14 +264,39 @@ def observations_to_predictions(
         reason = f"eBird: {scope}, mes relajado"
 
     scores: dict[str, int] = {}
+    counts: dict[str, int] = {}
+    last_seen_at: dict[str, datetime] = {}
     for obs in filtered:
         name = obs.common_name.strip()
         if not name:
             continue
         scores[name] = scores.get(name, 0) + score_for(obs)
+        counts[name] = counts.get(name, 0) + 1
+        if obs.observed_at:
+            prev = last_seen_at.get(name)
+            if prev is None or obs.observed_at > prev:
+                last_seen_at[name] = obs.observed_at
 
     rows: list[dict[str, Any]] = []
-    ranked = sorted(scores.items(), key=lambda pair: (-pair[1], pair[0].lower()))
-    for species, score in ranked[:limit]:
-        rows.append({"species": species, "score": score, "reason": reason})
+    ranked = sorted(
+        scores.keys(),
+        key=lambda species: (
+            -scores[species],
+            -counts.get(species, 0),
+            -(last_seen_at.get(species).timestamp() if species in last_seen_at else 0.0),
+            species.lower(),
+        ),
+    )
+
+    for species in ranked[:limit]:
+        last_seen = last_seen_at.get(species)
+        rows.append(
+            {
+                "species": species,
+                "score": scores[species],
+                "reason": reason,
+                "observations_count": counts.get(species, 0),
+                "last_seen_days_ago": (now_date - last_seen.date()).days if last_seen else None,
+            }
+        )
     return rows, confidence, fallback_used, reason
